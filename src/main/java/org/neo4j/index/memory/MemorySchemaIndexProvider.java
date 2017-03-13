@@ -6,15 +6,10 @@ import org.neo4j.io.pagecache.PageCache;
 import org.neo4j.kernel.api.index.*;
 import org.neo4j.kernel.configuration.Config;
 import org.neo4j.kernel.impl.api.index.sampling.IndexSamplingConfig;
-import org.neo4j.kernel.impl.store.SchemaStore;
-import org.neo4j.kernel.impl.store.StoreFactory;
-import org.neo4j.kernel.impl.storemigration.SchemaIndexMigrator;
+import org.neo4j.kernel.impl.api.scan.LabelScanStoreProvider;
 import org.neo4j.kernel.impl.storemigration.StoreMigrationParticipant;
-import org.neo4j.kernel.impl.storemigration.UpgradableDatabase;
 import org.neo4j.kernel.impl.util.CopyOnWriteHashMap;
-import org.neo4j.kernel.monitoring.Monitors;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.TreeMap;
@@ -22,10 +17,10 @@ import java.util.TreeMap;
 import static org.neo4j.index.memory.MemoryIndexProviderFactory.PROVIDER_DESCRIPTOR;
 
 public class MemorySchemaIndexProvider extends SchemaIndexProvider {
-    static int PRIORITY;
-    static {
+    static int PRIORITY = 2;
+    /*static {
         PRIORITY = 2;
-    }
+    }*/
 
     private final Map<Long, MemoryIndex> indexes = new CopyOnWriteHashMap<>();
 
@@ -34,7 +29,7 @@ public class MemorySchemaIndexProvider extends SchemaIndexProvider {
     }
 
     @Override
-    public StoreMigrationParticipant storeMigrationParticipant(FileSystemAbstraction fs, PageCache pageCache) {
+    public StoreMigrationParticipant storeMigrationParticipant(FileSystemAbstraction fs, PageCache pageCache, LabelScanStoreProvider labelScanStoreProvider) {
         return new NoopStoreMigrationParticipant();
     }
 
@@ -45,16 +40,16 @@ public class MemorySchemaIndexProvider extends SchemaIndexProvider {
         return index;
     }
 
-    private TreeMap<Object, long[]> createIndex() {
-        return new TreeMap<>();
-    }
-
     @Override
-    public IndexAccessor getOnlineAccessor(final long indexId, IndexConfiguration indexConfiguration, IndexSamplingConfig indexSamplingConfig) throws IOException {
+    public IndexAccessor getOnlineAccessor(long indexId, IndexDescriptor descriptor, IndexConfiguration config, IndexSamplingConfig samplingConfig) throws IOException {
         final MemoryIndex index = this.indexes.get(indexId);
         if (index == null || index.getState() != InternalIndexState.ONLINE)
             throw new IllegalStateException("Index " + indexId + " not online yet");
         return index;
+    }
+
+    private TreeMap<Object, long[]> createIndex() {
+        return new TreeMap<>();
     }
 
     @Override

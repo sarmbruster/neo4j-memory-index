@@ -24,7 +24,7 @@ public class StartupTimeTest {
     public static void main(String[] args) {
         boolean exists = new File(PATH).exists();
         if (!exists) createData();
-        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(PATH);
+        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(new File(PATH));
         createIndex(db);
         long time = waitIndexOnline(db);
         System.out.println("Startup took "+time+" seconds");
@@ -54,7 +54,7 @@ public class StartupTimeTest {
 
     private static void createData() {
         long start = System.currentTimeMillis();
-        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(PATH);
+        GraphDatabaseService db = new GraphDatabaseFactory().newEmbeddedDatabase(new File(PATH));
         int count=0;
         for (int j = 0; j < RUNS; j++) {
             try (Transaction tx = db.beginTx()) {

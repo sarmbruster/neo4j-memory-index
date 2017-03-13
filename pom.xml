@@ -10,7 +10,7 @@
     <name>Neo4j In-Memory Index</name>
 
     <properties>
-        <neo4j.version>2.3.2</neo4j.version>
+        <neo4j.version>3.1.2</neo4j.version>
         <chronicle.version>2.1.6</chronicle.version>
         <junit.version>4.11</junit.version>
     </properties>

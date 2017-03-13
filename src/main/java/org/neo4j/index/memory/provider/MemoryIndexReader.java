@@ -2,10 +2,8 @@ package org.neo4j.index.memory.provider;
 
 import org.neo4j.collection.primitive.PrimitiveLongCollections;
 import org.neo4j.collection.primitive.PrimitiveLongIterator;
-import org.neo4j.kernel.api.exceptions.index.IndexNotFoundKernelException;
-import org.neo4j.kernel.api.index.IndexReader;
-import org.neo4j.kernel.impl.api.index.sampling.NonUniqueIndexSampler;
-import org.neo4j.register.Register;
+import org.neo4j.storageengine.api.schema.IndexReader;
+import org.neo4j.storageengine.api.schema.IndexSampler;
 
 import java.util.*;
 
@@ -13,13 +11,9 @@ public class MemoryIndexReader implements IndexReader {
 
     private static final long[] EMPTY_LONGS = new long[0];
     private SortedMap<Object, long[]> snapshot;
-    private final NonUniqueIndexSampler nonUniqueIndexSampler;
-    private final Set<Class> valueTypesInIndex;
 
-    MemoryIndexReader(final SortedMap<Object, long[]> snapshot, NonUniqueIndexSampler nonUniqueIndexSampler, Set<Class> valueTypesInIndex) {
+    MemoryIndexReader(final SortedMap<Object, long[]> snapshot) {
         this.snapshot = snapshot;
-        this.nonUniqueIndexSampler = nonUniqueIndexSampler;
-        this.valueTypesInIndex = valueTypesInIndex;
     }
 
     @Override
@@ -58,21 +52,26 @@ public class MemoryIndexReader implements IndexReader {
         return new CombiningPrimitiveLongIterator(it);
     }
 
+    @Override
+    public PrimitiveLongIterator containsString(String exactTerm) {
+        return null;
+    }
+
+    @Override
+    public PrimitiveLongIterator endsWith(String suffix) {
+        return null;
+    }
+
     // TODO why nodeId ???
     @Override
-    public int countIndexedNodes(long nodeId, Object propertyValue) {
+    public long countIndexedNodes(long nodeId, Object propertyValue) {
         final long[] result = snapshot.get(propertyValue);
         return result == null ? 0 : result.length;
     }
 
     @Override
-    public Set<Class> valueTypesInIndex() {
-        return valueTypesInIndex;
-    }
-
-    @Override
-    public long sampleIndex(Register.DoubleLong.Out out) throws IndexNotFoundKernelException {
-        return nonUniqueIndexSampler.result(out);
+    public IndexSampler createSampler() {
+        return null;
     }
 
     @Override

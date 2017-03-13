@@ -3,13 +3,15 @@ package org.neo4j.index.memory.provider;
 import org.neo4j.collection.primitive.PrimitiveLongIterator;
 import org.neo4j.collection.primitive.PrimitiveLongSet;
 import org.neo4j.graphdb.ResourceIterator;
-import org.neo4j.kernel.api.direct.BoundedIterable;
-import org.neo4j.kernel.api.exceptions.index.IndexCapacityExceededException;
+import org.neo4j.helpers.collection.BoundedIterable;
+import org.neo4j.kernel.api.exceptions.index.IndexEntryConflictException;
 import org.neo4j.kernel.api.index.*;
 import org.neo4j.kernel.impl.api.index.IndexUpdateMode;
+import org.neo4j.kernel.impl.api.index.sampling.DefaultNonUniqueIndexSampler;
 import org.neo4j.kernel.impl.api.index.sampling.NonUniqueIndexSampler;
 import org.neo4j.kernel.impl.api.index.sampling.UniqueIndexSampler;
-import org.neo4j.register.Register;
+import org.neo4j.storageengine.api.schema.IndexReader;
+import org.neo4j.storageengine.api.schema.IndexSample;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,7 +23,7 @@ public class MemoryIndex implements IndexAccessor, IndexPopulator, IndexUpdater 
     private final Set<Class> valueTypesInIndex = new HashSet<>();
 
     private InternalIndexState state = InternalIndexState.POPULATING;
-    private NonUniqueIndexSampler nonUniqueIndexSampler = new NonUniqueIndexSampler(1000);
+    private NonUniqueIndexSampler nonUniqueIndexSampler = new DefaultNonUniqueIndexSampler(1000);
     private UniqueIndexSampler uniqueIndexSampler = new UniqueIndexSampler();
     private long maxCount = 0;
     private String failure;
@@ -44,24 +46,6 @@ public class MemoryIndex implements IndexAccessor, IndexPopulator, IndexUpdater 
         return this.state;
     }
 
-    @Override
-    public void add(final long nodeId, final Object propertyValue) throws IndexEntryConflictException, IOException, IndexCapacityExceededException {
-        long[] nodes = this.indexData.get(propertyValue);
-        if (nodes==null || nodes.length==0) {
-            sample(propertyValue);
-            this.indexData.put(propertyValue, new long[]{nodeId});
-            maxCount++;
-            return;
-        }
-        final int idx=this.indexOf(nodes,nodeId);
-        if (idx!=-1) return;
-        sample(propertyValue);
-        nodes = Arrays.copyOfRange(nodes, 0, nodes.length + 1);
-        nodes[nodes.length-1]=nodeId;
-        maxCount++;
-        this.indexData.put(propertyValue, nodes);
-    }
-
     private void sample(Object propertyValue) {
         nonUniqueIndexSampler.include(propertyValue.toString());
         valueTypesInIndex.add(propertyValue.getClass());
@@ -79,7 +63,7 @@ public class MemoryIndex implements IndexAccessor, IndexPopulator, IndexUpdater 
     }
 
     @Override
-    public void close(boolean populationCompletedSuccessfully) throws IOException, IndexCapacityExceededException {
+    public void close(boolean populationCompletedSuccessfully) throws IOException {
         if (populationCompletedSuccessfully) {
             this.state = InternalIndexState.ONLINE;
             this.failure = null;
@@ -94,24 +78,30 @@ public class MemoryIndex implements IndexAccessor, IndexPopulator, IndexUpdater 
     }
 
     @Override
-    public long sampleResult(Register.DoubleLong.Out out) {
-        return uniqueIndexSampler.result(out);
+    public void includeSample(NodePropertyUpdate update) {
+
     }
 
     @Override
-    public Reservation validate(Iterable<NodePropertyUpdate> iterable) throws IOException, IndexCapacityExceededException {
-        return Reservation.EMPTY;
+    public void configureSampling(boolean onlineSampling) {
+
     }
 
     @Override
-    public void process(final NodePropertyUpdate update) throws IOException, IndexEntryConflictException, IndexCapacityExceededException {
+    public IndexSample sampleResult() {
+        return null;
+//        return uniqueIndexSampler.result(out);
+    }
+
+    @Override
+    public void process(final NodePropertyUpdate update) throws IOException, IndexEntryConflictException {
         switch (update.getUpdateMode()) {
             case ADDED:
-                this.add(update.getNodeId(), update.getValueAfter());
+                this.add(update);
                 break;
             case CHANGED:
                 this.removed(update.getNodeId(), update.getValueBefore());
-                this.add(update.getNodeId(), update.getValueAfter());
+                this.add(update);
                 break;
             case REMOVED:
                 this.removed(update.getNodeId(), update.getValueBefore());
@@ -189,12 +179,39 @@ public class MemoryIndex implements IndexAccessor, IndexPopulator, IndexUpdater 
 
     @Override
     public IndexReader newReader() {
-        return new MemoryIndexReader(this.indexData,nonUniqueIndexSampler,valueTypesInIndex);
+        return new MemoryIndexReader(this.indexData);
     }
 
     @Override
     public void drop() throws IOException {
         clear();
+    }
+
+    @Override
+    public void add(Collection<NodePropertyUpdate> updates) throws IndexEntryConflictException, IOException {
+        for (NodePropertyUpdate update: updates) {
+            add(update);
+        }
+    }
+
+    private void add(NodePropertyUpdate update) {
+        Object propertyValue = update.getValueAfter();
+        long nodeId = update.getNodeId();
+
+        long[] nodes = this.indexData.get(propertyValue);
+        if (nodes==null || nodes.length==0) {
+            sample(propertyValue);
+            this.indexData.put(propertyValue, new long[]{nodeId});
+            maxCount++;
+            return;
+        }
+        final int idx=this.indexOf(nodes,nodeId);
+        if (idx!=-1) return;
+        sample(propertyValue);
+        nodes = Arrays.copyOfRange(nodes, 0, nodes.length + 1);
+        nodes[nodes.length-1]=nodeId;
+        maxCount++;
+        this.indexData.put(propertyValue, nodes);
     }
 
     @Override

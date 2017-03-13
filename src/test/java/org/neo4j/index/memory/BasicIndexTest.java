@@ -4,9 +4,9 @@ import org.junit.*;
 import org.neo4j.graphdb.*;
 import org.neo4j.graphdb.schema.IndexCreator;
 import org.neo4j.graphdb.schema.IndexDefinition;
-import org.neo4j.helpers.collection.IteratorUtil;
+import org.neo4j.helpers.collection.Iterables;
+import org.neo4j.helpers.collection.Iterators;
 import org.neo4j.io.fs.FileUtils;
-import org.neo4j.test.ImpermanentGraphDatabase;
 import org.neo4j.test.TestGraphDatabaseFactory;
 
 import java.io.File;
@@ -25,7 +25,7 @@ import static org.neo4j.graphdb.schema.Schema.IndexState.ONLINE;
 @Ignore
 public abstract class BasicIndexTest {
 
-    private static final Label LABEL = DynamicLabel.label("fooint");
+    private static final Label LABEL = Label.label("fooint");
     protected static final Label[] LABELS = new Label[]{LABEL};
     protected String PROPERTY = "bar";
     protected static final int COUNT = 100000;
@@ -42,7 +42,7 @@ public abstract class BasicIndexTest {
     public void testCreateAddIndex() throws Exception {
         try (Transaction tx = db.beginTx()) {
             final Iterable<IndexDefinition> indexes = db.schema().getIndexes(LABEL);
-            final IndexDefinition index = IteratorUtil.single(indexes);
+            final IndexDefinition index = Iterables.single(indexes);
             assertEquals(LABEL.name(), index.getLabel().name());
             assertEquals(ONLINE,db.schema().getIndexState(index));
             tx.success();
@@ -51,8 +51,8 @@ public abstract class BasicIndexTest {
         try (Transaction tx = db.beginTx()) {
             node = db.createNode(LABELS);
             node.setProperty(PROPERTY, 42);
-            final ResourceIterable<Node> nodes = db.findNodesByLabelAndProperty(LABEL, PROPERTY, 42);
-            assertEquals(node, IteratorUtil.single(nodes));
+            final ResourceIterator<Node> nodes = db.findNodes(LABEL, PROPERTY, 42);
+            assertEquals(node, Iterators.single(nodes));
             tx.success();
         }
         Map<String, Object> params = Collections.<String, Object>singletonMap("prop", 42);
